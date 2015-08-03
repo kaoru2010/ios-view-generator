@@ -3,6 +3,7 @@
 
 from optparse import OptionParser
 from xml.parsers import expat
+from ios_view_gen import os_view_parsers
 
 class Outputter(object):
     state_stack = []
@@ -34,11 +35,15 @@ class ParserFactory(object):
             return None
 
 class LayoutXmlParser(object):
+    current_parser = None
+    parser_stack = []
+
     def __init__(self, pf):
         self.pf = pf
 
         self.parser = expat.ParserCreate()
         self.parser.StartElementHandler = self.handle_start_element
+        self.parser.EndElementHandler = self.handle_end_element
 
     def parse(self, src):
         self.parser.Parse(src)
@@ -47,21 +52,19 @@ class LayoutXmlParser(object):
         #print name
         #print attrs
         p = self.pf.create(name, attrs)
-        if p != None:
-            p.handle_start_element(name, attrs)
+        if p is None:
+            p = os_view_parsers.ViewParser(name, attrs)
+        self.current_parser = p
+        self.parser_stack.append(p)
+        p.handle_start_element(name, attrs)
 
-class View(object):
-    def __init__(self, tag_name, attrs):
-        self.tag_name = tag_name
-        self.attrs = attrs
-
-class TextView(View):
-    def handle_start_element(self, name, attrs):
-        print name
-        print attrs
+    def handle_end_element(self, name):
+        p = self.parser_stack.pop()
+        p.handle_end_element(name)
+        self.current_parser = p
 
 pf = ParserFactory()
-pf.add_parser_creator('TextView', lambda tag_name, attrs: TextView(tag_name, attrs))
+pf.add_parser_creator('TextView', lambda tag_name, attrs: os_view_parsers.TextViewParser(tag_name, attrs))
 
 parser = OptionParser()
 (options, args) = parser.parse_args()
